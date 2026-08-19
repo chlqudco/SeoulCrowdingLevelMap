@@ -1,57 +1,53 @@
 package com.chlqudco.seoulcrowdinglevelmap.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.ui.graphics.Color
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = RadarGreen,
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primaryContainer = RadarMintSoft,
+    onPrimaryContainer = RadarGreenDark,
+    secondary = RadarMint,
+    onSecondary = RadarGreenDark,
+    background = RadarBackground,
+    onBackground = RadarInk,
+    surface = RadarSurface,
+    onSurface = RadarInk,
+    surfaceVariant = Color(0xFFEDF2F0),
+    onSurfaceVariant = RadarMuted,
+    outline = RadarLine,
+    error = CrowdedRed
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = RadarMint,
+    onPrimary = RadarGreenDark,
+    primaryContainer = Color(0xFF174E3E),
+    onPrimaryContainer = Color(0xFFC5F3E1),
+    secondary = RadarMint,
+    onSecondary = RadarGreenDark,
+    background = DarkBackground,
+    onBackground = Color(0xFFE5ECE9),
+    surface = DarkSurface,
+    onSurface = Color(0xFFE5ECE9),
+    surfaceVariant = Color(0xFF23302B),
+    onSurfaceVariant = Color(0xFFB6C2BD),
+    outline = DarkLine,
+    error = Color(0xFFFFB4AB)
 )
 
 @Composable
 fun SeoulCrowdingLevelMapTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content
     )
