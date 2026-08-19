@@ -14,6 +14,8 @@ val localProperties = Properties().apply {
 
 val seoulApiKey = localProperties.getProperty("SEOUL_API_KEY", "sample")
 val escapedSeoulApiKey = seoulApiKey.replace("\\", "\\\\").replace("\"", "\\\"")
+val naverMapKeyId = localProperties.getProperty("NAVER_MAP_KEY_ID", "")
+val escapedNaverMapKeyId = naverMapKeyId.replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.chlqudco.seoulcrowdinglevelmap"
@@ -32,6 +34,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SEOUL_API_KEY", "\"$escapedSeoulApiKey\"")
+        buildConfigField("String", "NAVER_MAP_KEY_ID", "\"$escapedNaverMapKeyId\"")
+        manifestPlaceholders["NAVER_MAP_KEY_ID"] = naverMapKeyId
     }
 
     buildTypes {
@@ -68,6 +72,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.retrofit)
+    implementation(libs.naver.map)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

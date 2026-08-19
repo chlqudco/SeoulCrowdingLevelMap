@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 
 enum class MainTab(val label: String) {
     HOME("홈"),
+    MAP("지도"),
     FAVORITES("즐겨찾기"),
     SETTINGS("설정")
 }
@@ -56,6 +57,7 @@ private data class ScreenControls(
 data class CrowdUiState(
     val allPlaces: List<Place> = emptyList(),
     val visiblePlaces: List<Place> = emptyList(),
+    val mapPlaces: List<Place> = emptyList(),
     val topPlaces: List<Place> = emptyList(),
     val selectedPlace: Place? = null,
     val selectedTab: MainTab = MainTab.HOME,
@@ -133,6 +135,7 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
         CrowdUiState(
             allPlaces = catalogPlaces,
             visiblePlaces = visible,
+            mapPlaces = filtered,
             topPlaces = topPlaces,
             selectedPlace = catalogPlaces.firstOrNull { it.config.areaCode == controls.selectedAreaCode },
             selectedTab = controls.selectedTab,
@@ -183,6 +186,7 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
     fun selectTab(tab: MainTab) {
         selectedTab.value = tab
         selectedAreaCode.value = null
+        if (tab == MainTab.MAP) refresh(force = false, showProgress = false, areaCodes = mapAreaCodes())
     }
 
     fun selectCategory(category: PlaceCategory) {
@@ -223,6 +227,10 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
         refresh(force = true, showProgress = true)
     }
 
+    fun refreshMapPlaces() {
+        refresh(force = true, showProgress = true, areaCodes = mapAreaCodes())
+    }
+
     fun refreshPlace(areaCode: String) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
@@ -240,8 +248,11 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
         viewModelScope.launch { repository.setRefreshInterval(minutes) }
     }
 
-    private fun refresh(force: Boolean, showProgress: Boolean) {
-        val areaCodes = currentPageAreaCodes()
+    private fun refresh(
+        force: Boolean,
+        showProgress: Boolean,
+        areaCodes: List<String> = currentPageAreaCodes()
+    ) {
         if (areaCodes.isEmpty()) return
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
@@ -253,6 +264,12 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
     }
 
     private fun currentPageAreaCodes(): List<String> {
+        val browse = browseState.value
+        val filtered = PlaceCatalog.places.filter { it.matches(browse) }
+        return pageSlice(filtered, browse.currentPage, PAGE_SIZE).map { it.areaCode }
+    }
+
+    private fun mapAreaCodes(): List<String> {
         val browse = browseState.value
         val filtered = PlaceCatalog.places.filter { it.matches(browse) }
         return pageSlice(filtered, browse.currentPage, PAGE_SIZE).map { it.areaCode }

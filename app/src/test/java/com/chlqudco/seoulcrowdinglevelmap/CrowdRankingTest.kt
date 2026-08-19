@@ -49,6 +49,7 @@ class CrowdRankingTest {
         val now = System.currentTimeMillis()
         assertEquals(121, PlaceCatalog.places.size)
         assertEquals(PlaceCatalog.places.size, PlaceCatalog.places.map { it.areaCode }.toSet().size)
+        assertEquals(121, PlaceCatalog.places.count { it.latitude != null && it.longitude != null })
         assertEquals(PlaceCatalog.places.map { it.areaCode }, PlaceCatalog.seedSnapshots(now).map { it.areaCode })
         assertEquals(
             mapOf(

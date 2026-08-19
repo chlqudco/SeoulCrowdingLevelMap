@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +40,62 @@ fun CrowdRadarApp(viewModel: CrowdViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         val selectedPlace = state.selectedPlace
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+                    MainTab.entries.forEach { tab ->
+                        val icon = when (tab) {
+                            MainTab.HOME -> Icons.Rounded.Home
+                            MainTab.MAP -> Icons.Rounded.Map
+                            MainTab.FAVORITES -> Icons.Rounded.Favorite
+                            MainTab.SETTINGS -> Icons.Rounded.Settings
+                        }
+                        NavigationBarItem(
+                            selected = state.selectedTab == tab,
+                            onClick = { viewModel.selectTab(tab) },
+                            icon = { Icon(icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) }
+                        )
+                    }
+                }
+            }
+        ) { innerPadding ->
+            when (state.selectedTab) {
+                MainTab.HOME -> HomeScreen(
+                    state = state,
+                    onCategorySelected = viewModel::selectCategory,
+                    onSearchQueryChanged = viewModel::updateSearchQuery,
+                    onPageSelected = viewModel::selectPage,
+                    onPlaceClick = viewModel::openDetail,
+                    onFavorite = viewModel::toggleFavorite,
+                    onRefresh = viewModel::refreshCurrentPage,
+                    modifier = Modifier.padding(innerPadding)
+                )
+                MainTab.MAP -> CrowdMapScreen(
+                    state = state,
+                    onCategorySelected = viewModel::selectCategory,
+                    onSearchQueryChanged = viewModel::updateSearchQuery,
+                    onPageSelected = viewModel::selectPage,
+                    onPlaceClick = viewModel::openDetail,
+                    onRefresh = viewModel::refreshMapPlaces,
+                    modifier = Modifier.padding(innerPadding)
+                )
+                MainTab.FAVORITES -> FavoritesScreen(
+                    state = state,
+                    onPlaceClick = viewModel::openDetail,
+                    onFavorite = viewModel::toggleFavorite,
+                    modifier = Modifier.padding(innerPadding)
+                )
+                MainTab.SETTINGS -> SettingsScreen(
+                    state = state,
+                    onAutoRefreshChanged = viewModel::setAutoRefresh,
+                    onRefreshIntervalChanged = viewModel::setRefreshInterval,
+                    onRefresh = viewModel::refreshCurrentPage,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+        }
         if (selectedPlace != null) {
             PlaceDetailScreen(
                 place = selectedPlace,
@@ -50,53 +107,6 @@ fun CrowdRadarApp(viewModel: CrowdViewModel) {
                 onFavorite = { viewModel.toggleFavorite(selectedPlace.config.areaCode) },
                 onRefresh = { viewModel.refreshPlace(selectedPlace.config.areaCode) }
             )
-        } else {
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                bottomBar = {
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
-                        MainTab.entries.forEach { tab ->
-                            val icon = when (tab) {
-                                MainTab.HOME -> Icons.Rounded.Home
-                                MainTab.FAVORITES -> Icons.Rounded.Favorite
-                                MainTab.SETTINGS -> Icons.Rounded.Settings
-                            }
-                            NavigationBarItem(
-                                selected = state.selectedTab == tab,
-                                onClick = { viewModel.selectTab(tab) },
-                                icon = { Icon(icon, contentDescription = tab.label) },
-                                label = { Text(tab.label) }
-                            )
-                        }
-                    }
-                }
-            ) { innerPadding ->
-                when (state.selectedTab) {
-                    MainTab.HOME -> HomeScreen(
-                        state = state,
-                        onCategorySelected = viewModel::selectCategory,
-                        onSearchQueryChanged = viewModel::updateSearchQuery,
-                        onPageSelected = viewModel::selectPage,
-                        onPlaceClick = viewModel::openDetail,
-                        onFavorite = viewModel::toggleFavorite,
-                        onRefresh = viewModel::refreshCurrentPage,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                    MainTab.FAVORITES -> FavoritesScreen(
-                        state = state,
-                        onPlaceClick = viewModel::openDetail,
-                        onFavorite = viewModel::toggleFavorite,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                    MainTab.SETTINGS -> SettingsScreen(
-                        state = state,
-                        onAutoRefreshChanged = viewModel::setAutoRefresh,
-                        onRefreshIntervalChanged = viewModel::setRefreshInterval,
-                        onRefresh = viewModel::refreshCurrentPage,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
         }
         SnackbarHost(
             hostState = snackbarHostState,
