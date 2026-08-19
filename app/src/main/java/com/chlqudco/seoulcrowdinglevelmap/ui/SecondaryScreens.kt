@@ -111,7 +111,7 @@ fun SettingsScreen(
                 SettingRow(
                     icon = Icons.Rounded.Autorenew,
                     title = "자동 갱신",
-                    description = "앱을 사용하는 동안 오래된 데이터만 갱신해요",
+                    description = "앱을 사용하는 동안 현재 페이지의 오래된 데이터만 갱신해요",
                     trailing = {
                         Switch(checked = state.autoRefresh, onCheckedChange = onAutoRefreshChanged)
                     }
@@ -153,9 +153,9 @@ fun SettingsScreen(
                     icon = Icons.Rounded.CloudSync,
                     title = "서울시 API 연결",
                     description = if (state.isDemoMode) {
-                        "샘플 키 사용 중 · 광화문 외 장소는 체험 데이터"
+                        "샘플 키 사용 중 · 광화문·덕수궁 외 120곳은 체험 데이터"
                     } else {
-                        "인증키 연결됨 · 19개 장소 실시간 조회"
+                        "인증키 연결됨 · 공식 121개 장소를 페이지 단위로 조회"
                     },
                     trailing = {
                         Box(
@@ -191,7 +191,7 @@ fun SettingsScreen(
                         Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(19.dp))
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text("지금 전체 새로고침")
+                    Text("현재 페이지 새로고침")
                 }
             }
         }
@@ -218,7 +218,7 @@ fun SettingsScreen(
                 SettingRow(
                     icon = Icons.Rounded.DataObject,
                     title = "데이터 안내",
-                    description = "서울시 실시간 도시데이터를 장소별로 조회합니다. 통신사 추정 인구이므로 실제 현장과 차이가 있을 수 있어요."
+                    description = "서울시 실시간 도시데이터 121개 장소를 20개씩 조회합니다. 통신사 추정 인구이므로 실제 현장과 차이가 있을 수 있어요."
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(

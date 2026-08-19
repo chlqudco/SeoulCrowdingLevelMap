@@ -49,10 +49,13 @@ class CrowdPreferences(private val context: Context) {
         preferences[Keys.refreshInterval] ?: 10
     }
 
-    suspend fun seedIfEmpty(seed: List<CrowdSnapshot>) {
+    suspend fun mergeSeedSnapshots(seed: List<CrowdSnapshot>) {
         context.crowdDataStore.edit { preferences ->
-            if (decodeSnapshots(preferences[Keys.snapshots].orEmpty()).isEmpty()) {
-                preferences[Keys.snapshots] = encodeSnapshots(seed)
+            val current = decodeSnapshots(preferences[Keys.snapshots].orEmpty())
+            val currentCodes = current.mapTo(mutableSetOf()) { it.areaCode }
+            val missing = seed.filterNot { it.areaCode in currentCodes }
+            if (missing.isNotEmpty()) {
+                preferences[Keys.snapshots] = encodeSnapshots(current + missing)
             }
         }
     }

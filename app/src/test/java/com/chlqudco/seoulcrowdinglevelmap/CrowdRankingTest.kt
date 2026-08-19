@@ -7,9 +7,10 @@ import com.chlqudco.seoulcrowdinglevelmap.model.Place
 import com.chlqudco.seoulcrowdinglevelmap.model.PlaceCategory
 import com.chlqudco.seoulcrowdinglevelmap.model.PlaceConfig
 import com.chlqudco.seoulcrowdinglevelmap.model.Trend
+import com.chlqudco.seoulcrowdinglevelmap.model.pageCount
+import com.chlqudco.seoulcrowdinglevelmap.model.pageSlice
 import com.chlqudco.seoulcrowdinglevelmap.model.rankPlaces
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CrowdRankingTest {
@@ -44,11 +45,28 @@ class CrowdRankingTest {
     }
 
     @Test
-    fun catalogContainsUniqueMvpPlacesAndSeedData() {
+    fun catalogContainsAllOfficialPlacesAndSeedData() {
         val now = System.currentTimeMillis()
-        assertTrue(PlaceCatalog.places.size in 12..20)
+        assertEquals(121, PlaceCatalog.places.size)
         assertEquals(PlaceCatalog.places.size, PlaceCatalog.places.map { it.areaCode }.toSet().size)
         assertEquals(PlaceCatalog.places.map { it.areaCode }, PlaceCatalog.seedSnapshots(now).map { it.areaCode })
+        assertEquals(
+            mapOf(
+                PlaceCategory.TOURIST_ZONE to 7,
+                PlaceCategory.HERITAGE to 5,
+                PlaceCategory.CROWDED_AREA to 48,
+                PlaceCategory.COMMERCIAL to 28,
+                PlaceCategory.PARK to 33
+            ),
+            PlaceCatalog.places.groupingBy { it.category }.eachCount()
+        )
+    }
+
+    @Test
+    fun pagingSplits121PlacesIntoSevenPages() {
+        assertEquals(7, pageCount(121, 20))
+        assertEquals((1..20).toList(), pageSlice((1..121).toList(), 1, 20))
+        assertEquals(listOf(121), pageSlice((1..121).toList(), 7, 20))
     }
 
     private fun place(
@@ -58,7 +76,17 @@ class CrowdRankingTest {
         max: Int,
         fetchedAt: Long
     ): Place {
-        val config = PlaceConfig(code, code, PlaceCategory.HOT_PLACE, "서울", "", 0.0, 0.0, code.first().code)
+        val config = PlaceConfig(
+            areaCode = code,
+            areaName = code,
+            englishName = code,
+            category = PlaceCategory.CROWDED_AREA,
+            displayOrder = code.first().code,
+            district = "서울",
+            tagline = "",
+            latitude = null,
+            longitude = null
+        )
         return Place(config, snapshot(code, level, min, max, null, fetchedAt), false)
     }
 

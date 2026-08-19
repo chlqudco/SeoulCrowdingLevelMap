@@ -36,14 +36,18 @@ class CrowdRepository(context: Context) {
 
     suspend fun initialize() {
         val seed = PlaceCatalog.seedSnapshots(System.currentTimeMillis())
-        preferences.seedIfEmpty(seed)
-        val currentCodes = preferences.currentSnapshots().mapTo(mutableSetOf()) { it.areaCode }
-        for (snapshot in seed.filterNot { it.areaCode in currentCodes }) {
-            preferences.updateSnapshot(snapshot)
-        }
+        preferences.mergeSeedSnapshots(seed)
     }
 
-    suspend fun refreshAll(ttlMinutes: Int, force: Boolean): RefreshResult {
+    suspend fun refreshPlaces(
+        areaCodes: Collection<String>,
+        ttlMinutes: Int,
+        force: Boolean
+    ): RefreshResult {
+        val requestedCodes = areaCodes.toSet()
+        if (requestedCodes.isEmpty()) {
+            return RefreshResult(0, 0, true, "새로고침할 장소가 없어요.")
+        }
         val now = System.currentTimeMillis()
         if (force && now - lastManualRefreshAt < MANUAL_COOLDOWN) {
             val seconds = ((MANUAL_COOLDOWN - (now - lastManualRefreshAt)) / 1_000L + 1L).coerceAtLeast(1L)
@@ -54,11 +58,15 @@ class CrowdRepository(context: Context) {
             val snapshots = preferences.currentSnapshots()
             val byCode = snapshots.associateBy { it.areaCode }
             val targets = PlaceCatalog.places.filter { config ->
+                if (config.areaCode !in requestedCodes) return@filter false
                 val snapshot = byCode[config.areaCode]
-                force || snapshot == null || now - snapshot.fetchedAt > ttlMinutes * 60_000L
+                force ||
+                    snapshot == null ||
+                    now - snapshot.fetchedAt > ttlMinutes * 60_000L ||
+                    (!isDemoMode && snapshot.isDemo)
             }
             if (targets.isEmpty()) {
-                return@withLock RefreshResult(0, 0, true, "모든 장소가 최신 상태예요.")
+                return@withLock RefreshResult(0, 0, true, "현재 페이지가 최신 상태예요.")
             }
             val results = coroutineScope {
                 targets.map { config ->
@@ -72,10 +80,10 @@ class CrowdRepository(context: Context) {
             val refreshed = results.count { it }
             val failed = results.size - refreshed
             val message = when {
-                failed == 0 && isDemoMode -> "데모 장소 ${refreshed}곳을 최신 상태로 바꿨어요."
-                failed == 0 -> "장소 ${refreshed}곳을 새로고침했어요."
-                refreshed == 0 -> "실시간 갱신에 실패해 저장된 데이터를 표시해요."
-                else -> "${refreshed}곳 갱신 완료 · ${failed}곳은 저장된 데이터를 표시해요."
+                failed == 0 && isDemoMode -> "현재 페이지 ${refreshed}곳의 체험 데이터를 갱신했어요."
+                failed == 0 -> "현재 페이지 ${refreshed}곳을 새로고침했어요."
+                refreshed == 0 -> "현재 페이지 갱신에 실패해 저장된 데이터를 표시해요."
+                else -> "현재 페이지 ${refreshed}곳 갱신 완료 · ${failed}곳은 저장된 데이터를 표시해요."
             }
             RefreshResult(refreshed, failed, false, message)
         }

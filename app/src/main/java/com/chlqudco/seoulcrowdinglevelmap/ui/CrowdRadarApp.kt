@@ -75,9 +75,11 @@ fun CrowdRadarApp(viewModel: CrowdViewModel) {
                     MainTab.HOME -> HomeScreen(
                         state = state,
                         onCategorySelected = viewModel::selectCategory,
+                        onSearchQueryChanged = viewModel::updateSearchQuery,
+                        onPageSelected = viewModel::selectPage,
                         onPlaceClick = viewModel::openDetail,
                         onFavorite = viewModel::toggleFavorite,
-                        onRefresh = viewModel::refreshAll,
+                        onRefresh = viewModel::refreshCurrentPage,
                         modifier = Modifier.padding(innerPadding)
                     )
                     MainTab.FAVORITES -> FavoritesScreen(
@@ -90,7 +92,7 @@ fun CrowdRadarApp(viewModel: CrowdViewModel) {
                         state = state,
                         onAutoRefreshChanged = viewModel::setAutoRefresh,
                         onRefreshIntervalChanged = viewModel::setRefreshInterval,
-                        onRefresh = viewModel::refreshAll,
+                        onRefresh = viewModel::refreshCurrentPage,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }

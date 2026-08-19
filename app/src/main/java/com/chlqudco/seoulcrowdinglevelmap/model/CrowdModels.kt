@@ -24,10 +24,11 @@ enum class CrowdLevel(
 
 enum class PlaceCategory(val label: String) {
     ALL("전체"),
-    HOT_PLACE("핫플"),
-    PARK("공원·산책"),
-    TOURISM("관광"),
-    SHOPPING("쇼핑·상권")
+    TOURIST_ZONE("관광특구"),
+    HERITAGE("고궁·문화유산"),
+    CROWDED_AREA("인구밀집지역"),
+    COMMERCIAL("발달상권"),
+    PARK("공원")
 }
 
 enum class Trend {
@@ -40,12 +41,13 @@ enum class Trend {
 data class PlaceConfig(
     val areaCode: String,
     val areaName: String,
+    val englishName: String,
     val category: PlaceCategory,
+    val displayOrder: Int,
     val district: String,
     val tagline: String,
-    val latitude: Double,
-    val longitude: Double,
-    val displayOrder: Int
+    val latitude: Double?,
+    val longitude: Double?
 )
 
 data class CrowdSnapshot(
@@ -105,4 +107,16 @@ fun rankPlaces(
             it.snapshot.level.rank * 10_000_000L + stalePenalty + it.snapshot.midPopulation
         }.thenBy { it.config.displayOrder }
     )
+}
+
+fun pageCount(itemCount: Int, pageSize: Int): Int {
+    if (itemCount <= 0 || pageSize <= 0) return 0
+    return (itemCount + pageSize - 1) / pageSize
+}
+
+fun <T> pageSlice(items: List<T>, page: Int, pageSize: Int): List<T> {
+    if (items.isEmpty() || pageSize <= 0) return emptyList()
+    val safePage = page.coerceIn(1, pageCount(items.size, pageSize))
+    val fromIndex = (safePage - 1) * pageSize
+    return items.subList(fromIndex, minOf(fromIndex + pageSize, items.size))
 }

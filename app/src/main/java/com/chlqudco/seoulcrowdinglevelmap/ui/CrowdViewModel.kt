@@ -4,9 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chlqudco.seoulcrowdinglevelmap.data.CrowdRepository
+import com.chlqudco.seoulcrowdinglevelmap.data.PlaceCatalog
 import com.chlqudco.seoulcrowdinglevelmap.model.Place
 import com.chlqudco.seoulcrowdinglevelmap.model.PlaceCategory
+import com.chlqudco.seoulcrowdinglevelmap.model.PlaceConfig
+import com.chlqudco.seoulcrowdinglevelmap.model.pageCount
+import com.chlqudco.seoulcrowdinglevelmap.model.pageSlice
 import com.chlqudco.seoulcrowdinglevelmap.model.rankPlaces
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,15 +33,21 @@ data class RefreshUiState(
     val message: String? = null
 )
 
-data class UserPreferences(
+private data class UserPreferences(
     val favorites: Set<String> = emptySet(),
     val autoRefresh: Boolean = true,
     val refreshInterval: Int = 10
 )
 
-data class ScreenControls(
-    val selectedTab: MainTab = MainTab.HOME,
+private data class BrowseState(
     val selectedCategory: PlaceCategory = PlaceCategory.ALL,
+    val searchQuery: String = "",
+    val currentPage: Int = 1
+)
+
+private data class ScreenControls(
+    val selectedTab: MainTab = MainTab.HOME,
+    val browse: BrowseState = BrowseState(),
     val selectedAreaCode: String? = null,
     val refresh: RefreshUiState = RefreshUiState(),
     val now: Long = System.currentTimeMillis()
@@ -49,6 +60,12 @@ data class CrowdUiState(
     val selectedPlace: Place? = null,
     val selectedTab: MainTab = MainTab.HOME,
     val selectedCategory: PlaceCategory = PlaceCategory.ALL,
+    val searchQuery: String = "",
+    val currentPage: Int = 1,
+    val totalPages: Int = 0,
+    val filteredCount: Int = 0,
+    val pageStart: Int = 0,
+    val pageEnd: Int = 0,
     val autoRefresh: Boolean = true,
     val refreshInterval: Int = 10,
     val isRefreshing: Boolean = false,
@@ -57,15 +74,18 @@ data class CrowdUiState(
     val now: Long = System.currentTimeMillis()
 ) {
     val lastRefreshAt: Long?
-        get() = allPlaces.maxOfOrNull { it.snapshot.fetchedAt }
+        get() = visiblePlaces.maxOfOrNull { it.snapshot.fetchedAt }
+            ?: allPlaces.maxOfOrNull { it.snapshot.fetchedAt }
 }
 
 class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
     private val selectedTab = MutableStateFlow(MainTab.HOME)
-    private val selectedCategory = MutableStateFlow(PlaceCategory.ALL)
+    private val browseState = MutableStateFlow(BrowseState())
     private val selectedAreaCode = MutableStateFlow<String?>(null)
     private val refreshState = MutableStateFlow(RefreshUiState())
     private val clock = MutableStateFlow(System.currentTimeMillis())
+    private var refreshJob: Job? = null
+    private var searchRefreshJob: Job? = null
 
     private val preferences = combine(
         repository.favorites,
@@ -77,37 +97,52 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
 
     private val controls = combine(
         selectedTab,
-        selectedCategory,
+        browseState,
         selectedAreaCode,
         refreshState,
         clock
-    ) { tab, category, areaCode, refresh, now ->
-        ScreenControls(tab, category, areaCode, refresh, now)
+    ) { tab, browse, areaCode, refresh, now ->
+        ScreenControls(tab, browse, areaCode, refresh, now)
     }
 
     val uiState = combine(repository.snapshots, preferences, controls) { snapshots, preferences, controls ->
         val snapshotsByCode = snapshots.associateBy { it.areaCode }
-        val allPlaces = com.chlqudco.seoulcrowdinglevelmap.data.PlaceCatalog.places.mapNotNull { config ->
+        val catalogPlaces = PlaceCatalog.places.mapNotNull { config ->
             snapshotsByCode[config.areaCode]?.let { snapshot ->
                 Place(config, snapshot, config.areaCode in preferences.favorites)
             }
         }
-        val ranked = rankPlaces(allPlaces, controls.now, preferences.refreshInterval)
-        val categoryPlaces = ranked.filter {
-            controls.selectedCategory == PlaceCategory.ALL || it.config.category == controls.selectedCategory
-        }
-        val visible = if (controls.selectedTab == MainTab.FAVORITES) {
-            ranked.filter { it.isFavorite }
+        val ranked = rankPlaces(catalogPlaces, controls.now, preferences.refreshInterval)
+        val filtered = catalogPlaces.filter { it.config.matches(controls.browse) }
+        val totalPages = pageCount(filtered.size, PAGE_SIZE)
+        val currentPage = if (totalPages == 0) 1 else controls.browse.currentPage.coerceIn(1, totalPages)
+        val currentPagePlaces = pageSlice(filtered, currentPage, PAGE_SIZE)
+        val rankedFiltered = rankPlaces(filtered, controls.now, preferences.refreshInterval)
+        val liveRanked = rankedFiltered.filterNot { it.snapshot.isDemo }
+        val topPlaces = if (!repository.isDemoMode && liveRanked.size >= TOP_PLACE_COUNT) {
+            liveRanked.take(TOP_PLACE_COUNT)
         } else {
-            categoryPlaces
+            rankedFiltered.take(TOP_PLACE_COUNT)
         }
+        val visible = when (controls.selectedTab) {
+            MainTab.FAVORITES -> ranked.filter { it.isFavorite }
+            else -> currentPagePlaces
+        }
+        val pageStart = if (filtered.isEmpty()) 0 else (currentPage - 1) * PAGE_SIZE + 1
+        val pageEnd = minOf(currentPage * PAGE_SIZE, filtered.size)
         CrowdUiState(
-            allPlaces = ranked,
+            allPlaces = catalogPlaces,
             visiblePlaces = visible,
-            topPlaces = categoryPlaces.take(5),
-            selectedPlace = ranked.firstOrNull { it.config.areaCode == controls.selectedAreaCode },
+            topPlaces = topPlaces,
+            selectedPlace = catalogPlaces.firstOrNull { it.config.areaCode == controls.selectedAreaCode },
             selectedTab = controls.selectedTab,
-            selectedCategory = controls.selectedCategory,
+            selectedCategory = controls.browse.selectedCategory,
+            searchQuery = controls.browse.searchQuery,
+            currentPage = currentPage,
+            totalPages = totalPages,
+            filteredCount = filtered.size,
+            pageStart = pageStart,
+            pageEnd = pageEnd,
             autoRefresh = preferences.autoRefresh,
             refreshInterval = preferences.refreshInterval,
             isRefreshing = controls.refresh.isRefreshing,
@@ -151,7 +186,25 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
     }
 
     fun selectCategory(category: PlaceCategory) {
-        selectedCategory.value = category
+        searchRefreshJob?.cancel()
+        browseState.value = browseState.value.copy(selectedCategory = category, currentPage = 1)
+        refresh(force = false, showProgress = false)
+    }
+
+    fun updateSearchQuery(query: String) {
+        browseState.value = browseState.value.copy(searchQuery = query, currentPage = 1)
+        searchRefreshJob?.cancel()
+        searchRefreshJob = viewModelScope.launch {
+            delay(SEARCH_REFRESH_DELAY)
+            refresh(force = false, showProgress = false)
+        }
+    }
+
+    fun selectPage(page: Int) {
+        if (page == browseState.value.currentPage || page < 1) return
+        searchRefreshJob?.cancel()
+        browseState.value = browseState.value.copy(currentPage = page)
+        refresh(force = false, showProgress = false)
     }
 
     fun openDetail(areaCode: String) {
@@ -166,13 +219,13 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
         viewModelScope.launch { repository.toggleFavorite(areaCode) }
     }
 
-    fun refreshAll() {
+    fun refreshCurrentPage() {
         refresh(force = true, showProgress = true)
     }
 
     fun refreshPlace(areaCode: String) {
-        if (refreshState.value.isRefreshing) return
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             refreshState.value = RefreshUiState(isRefreshing = true)
             val result = repository.refreshPlace(areaCode)
             showResult(result.message)
@@ -188,19 +241,43 @@ class CrowdViewModel(private val repository: CrowdRepository) : ViewModel() {
     }
 
     private fun refresh(force: Boolean, showProgress: Boolean) {
-        if (refreshState.value.isRefreshing) return
-        viewModelScope.launch {
+        val areaCodes = currentPageAreaCodes()
+        if (areaCodes.isEmpty()) return
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             if (showProgress) refreshState.value = RefreshUiState(isRefreshing = true)
             val interval = repository.refreshInterval.first()
-            val result = repository.refreshAll(interval, force)
+            val result = repository.refreshPlaces(areaCodes, interval, force)
             if (showProgress || result.failed > 0) showResult(result.message)
         }
+    }
+
+    private fun currentPageAreaCodes(): List<String> {
+        val browse = browseState.value
+        val filtered = PlaceCatalog.places.filter { it.matches(browse) }
+        return pageSlice(filtered, browse.currentPage, PAGE_SIZE).map { it.areaCode }
+    }
+
+    private fun PlaceConfig.matches(browse: BrowseState): Boolean {
+        if (browse.selectedCategory != PlaceCategory.ALL && category != browse.selectedCategory) return false
+        val query = browse.searchQuery.trim()
+        return query.isBlank() ||
+            areaName.contains(query, ignoreCase = true) ||
+            englishName.contains(query, ignoreCase = true) ||
+            areaCode.contains(query, ignoreCase = true) ||
+            category.label.contains(query, ignoreCase = true)
     }
 
     private suspend fun showResult(message: String) {
         refreshState.value = RefreshUiState(message = message)
         delay(3_500L)
         if (refreshState.value.message == message) refreshState.value = RefreshUiState()
+    }
+
+    private companion object {
+        const val PAGE_SIZE = 20
+        const val TOP_PLACE_COUNT = 5
+        const val SEARCH_REFRESH_DELAY = 600L
     }
 }
 

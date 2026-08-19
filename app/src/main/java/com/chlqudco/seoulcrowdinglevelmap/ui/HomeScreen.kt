@@ -20,7 +20,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -28,6 +32,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -50,6 +55,8 @@ import com.chlqudco.seoulcrowdinglevelmap.ui.theme.RadarMint
 fun HomeScreen(
     state: CrowdUiState,
     onCategorySelected: (PlaceCategory) -> Unit,
+    onSearchQueryChanged: (String) -> Unit,
+    onPageSelected: (Int) -> Unit,
     onPlaceClick: (String) -> Unit,
     onFavorite: (String) -> Unit,
     onRefresh: () -> Unit,
@@ -81,7 +88,7 @@ fun HomeScreen(
             if (state.isDemoMode) {
                 item {
                     InformationBanner(
-                        text = "API 샘플 모드예요. 광화문·덕수궁 외 장소는 체험용 데이터로 표시됩니다.",
+                        text = "API 샘플 모드예요. 광화문·덕수궁 외 120곳은 체험용 데이터로 표시됩니다.",
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                     )
                 }
@@ -119,7 +126,7 @@ fun HomeScreen(
             }
             item {
                 Text(
-                    text = "TOP 5는 현재 수집된 장소를 비교한 결과이며 안전을 보장하는 지표가 아니에요.",
+                    text = "TOP 5는 공식 121개 장소의 현재 저장 데이터를 비교한 결과이며 안전을 보장하는 지표가 아니에요.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall
@@ -129,13 +136,40 @@ fun HomeScreen(
             item {
                 SectionTitle(
                     title = "장소 둘러보기",
-                    subtitle = "${state.visiblePlaces.size}곳",
+                    subtitle = if (state.filteredCount == 0) {
+                        "검색 결과 없음"
+                    } else {
+                        "${state.pageStart}~${state.pageEnd} / ${state.filteredCount}곳"
+                    },
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
+                OutlinedTextField(
+                    value = state.searchQuery,
+                    onValueChange = onSearchQueryChanged,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 13.dp),
+                    label = { Text("장소 검색") },
+                    placeholder = { Text("강남역, Hangang, POI014") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    trailingIcon = if (state.searchQuery.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { onSearchQueryChanged("") }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "검색어 지우기")
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(18.dp)
+                )
+            }
+            item {
                 LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 13.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(PlaceCategory.entries, key = { it.name }) { category ->
@@ -157,6 +191,40 @@ fun HomeScreen(
                     }
                 }
             }
+            if (state.totalPages > 0) {
+                item {
+                    PageNavigator(
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        onPageSelected = onPageSelected,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    )
+                }
+            }
+            if (state.visiblePlaces.isEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("조건에 맞는 장소가 없어요", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(7.dp))
+                            Text(
+                                "검색어나 분류를 바꿔 보세요",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
             items(state.visiblePlaces, key = { it.config.areaCode }) { place ->
                 PlaceListCard(
                     place = place,
@@ -166,6 +234,16 @@ fun HomeScreen(
                     onFavorite = { onFavorite(place.config.areaCode) },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                 )
+            }
+            if (state.totalPages > 1 && state.visiblePlaces.isNotEmpty()) {
+                item {
+                    PageNavigator(
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        onPageSelected = onPageSelected,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
+                    )
+                }
             }
         }
     }
@@ -200,8 +278,47 @@ private fun HomeTopBar(
             if (isRefreshing) {
                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
             } else {
-                Icon(Icons.Rounded.Refresh, contentDescription = "전체 새로고침")
+                Icon(Icons.Rounded.Refresh, contentDescription = "현재 페이지 새로고침")
             }
+        }
+    }
+}
+
+@Composable
+private fun PageNavigator(
+    currentPage: Int,
+    totalPages: Int,
+    onPageSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        IconButton(
+            onClick = { onPageSelected(currentPage - 1) },
+            enabled = currentPage > 1
+        ) {
+            Icon(Icons.Rounded.ChevronLeft, contentDescription = "이전 페이지")
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = RoundedCornerShape(50)
+        ) {
+            Text(
+                text = "${currentPage} / ${totalPages} 페이지 · 20개씩",
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        IconButton(
+            onClick = { onPageSelected(currentPage + 1) },
+            enabled = currentPage < totalPages
+        ) {
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "다음 페이지")
         }
     }
 }

@@ -129,8 +129,16 @@ fun PlaceDetailScreen(
                     )
                 }
             }
-            if (isDemoMode && place.snapshot.isDemo) {
-                item { InformationBanner("이 장소는 API 키 연결 전 체험용 데이터예요.") }
+            if (place.snapshot.isDemo) {
+                item {
+                    InformationBanner(
+                        if (isDemoMode) {
+                            "이 장소는 API 키 연결 전 체험용 데이터예요."
+                        } else {
+                            "아직 실시간 조회 전인 장소예요. 새로고침해 주세요."
+                        }
+                    )
+                }
             }
             item { CrowdOverviewCard(place) }
             item { PopulationCard(place) }
@@ -178,8 +186,14 @@ fun PlaceDetailScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
                         onClick = {
+                            val latitude = place.config.latitude
+                            val longitude = place.config.longitude
                             val name = Uri.encode(place.config.areaName)
-                            val uri = "geo:${place.config.latitude},${place.config.longitude}?q=${place.config.latitude},${place.config.longitude}($name)".toUri()
+                            val uri = if (latitude != null && longitude != null) {
+                                "geo:$latitude,$longitude?q=$latitude,$longitude($name)".toUri()
+                            } else {
+                                "geo:0,0?q=${Uri.encode("${place.config.areaName}, 서울")}".toUri()
+                            }
                             context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                         },
                         modifier = Modifier.weight(1f),
